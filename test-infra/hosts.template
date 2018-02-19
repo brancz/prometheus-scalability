@@ -1,0 +1,16 @@
+[masters:vars]
+vm_count=3
+vm_cpus=2
+vm_memory=8192
+
+[workers:vars]
+vm_count=14
+vm_cpus=1
+vm_memory=2048
+
+[masters]
+master ansible_host=1.2.3.4
+
+[workers]
+worker1 ansible_host=1.2.3.4
+worker2 ansible_host=1.2.3.4

@@ -1,0 +1,28 @@
+- hosts: all
+
+  vars:
+    tf_env:
+      INSTALLER_PATH: "/opt/tectonic_1.8.4-tectonic.3/tectonic-installer/linux/installer"
+      PATH: "/opt/tectonic_1.8.4-tectonic.3/tectonic-installer/linux:$PATH"
+      CLUSTER: prom-scale-test
+      TF_VAR_tectonic_admin_email: "admin@example.com"
+      TF_VAR_tectonic_admin_password: "pl41nT3xt"
+
+  tasks:
+  - name: ssh test
+#    shell: "ssh -t core@master-node1 hostname"
+    shell: "ssh-add -l"
+#    become_flags: "-E"
+
+  - name: run terraform apply
+    command: terraform apply -var-file=build/prom-scale-test/terraform.tfvars platforms/metal
+    args:
+      chdir: "/opt/tectonic_1.8.4-tectonic.3/"
+    environment: "{{tf_env}}"
+    when: ansible_hostname == 'master'
+    become_flags: "-E"
+    async: 45
+    poll: 5
+    register: tfrun
+
+  - debug: var=tfrun

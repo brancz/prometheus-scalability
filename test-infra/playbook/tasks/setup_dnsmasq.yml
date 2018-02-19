@@ -1,0 +1,50 @@
+  - stat:
+      path: /var/lib/tftpboot
+    register: sttftpboot
+
+  - name: create tftpboot directory
+    file:
+      path: /var/lib/tftpboot
+      state: directory
+      mode: 0755
+    when: sttftpboot.stat.exists == False
+
+  - name: download undionly.kpxe
+    get_url:
+      url: http://boot.ipxe.org/undionly.kpxe
+      dest: /var/lib/tftpboot/
+    when: sttftpboot.stat.exists == False
+
+  - name: download ipxe.efi
+    get_url:
+      url: http://boot.ipxe.org/ipxe.efi
+      dest: /var/lib/tftpboot/
+    when: sttftpboot.stat.exists == False
+
+  - name: download grub.efi
+    get_url:
+      url: https://stable.release.core-os.net/amd64-usr/1353.7.0/coreos_production_pxe_grub.efi
+      dest: /var/lib/tftpboot/grub.efi
+    when: sttftpboot.stat.exists == False
+
+  - name: write dnsmasq.hosts file
+    template:
+      src: templates/dnsmasq.hosts.tpl
+      dest: /etc/dnsmasq.hosts
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: write dnsmasq config file
+    template:
+      src: templates/dnsmasq.conf.tpl
+      dest: /etc/dnsmasq.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: enable and start dnsmasq
+    service:
+      name: dnsmasq
+      enabled: yes
+      state: started

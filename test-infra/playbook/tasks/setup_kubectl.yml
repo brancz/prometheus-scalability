@@ -1,0 +1,28 @@
+  - stat:
+      path: /usr/local/bin/kubectl
+    register: stkubectl
+
+  - name: install kubectl
+    shell: "curl -o /usr/local/bin/kubectl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+    when: stkubectl.stat.exists == False
+
+  - name: make kubectl executable
+    file:
+      path: /usr/local/bin/kubectl
+      mode: 0755
+
+  - name: create /root/.kube directory
+    file:
+      path: /root/.kube
+      owner: root
+      group: root
+      state: directory
+
+  - name: symlink kubeconfig
+    file:
+      src: /opt/tectonic_1.8.4-tectonic.3/generated/auth/kubeconfig
+      dest: /root/.kube/config
+      owner: root
+      group: root
+      state: link
+      force: yes

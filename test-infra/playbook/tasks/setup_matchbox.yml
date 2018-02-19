@@ -1,0 +1,100 @@
+  - stat:
+      path: /opt/matchbox-v0.7.0-linux-amd64/
+    register: stmatchbox
+
+  - name: download and extract matchbox
+    unarchive:
+      src: https://github.com/coreos/matchbox/releases/download/v0.7.0/matchbox-v0.7.0-linux-amd64.tar.gz
+      dest: /opt/
+      remote_src: yes
+    when: stmatchbox.stat.exists == False
+
+  - name: write matchbox unit file
+    template:
+      src: templates/matchbox.service.tpl
+      dest: /etc/systemd/system/matchbox.service
+
+  - name: create matchbox group
+    group:
+      name: matchbox
+      state: present
+
+  - name: create matchbox user
+    user:
+      name: matchbox
+      group: matchbox
+
+  - name: create matchbox config directory
+    file:
+      path: /etc/matchbox
+      owner: matchbox
+      group: matchbox
+      state: directory
+      mode: 0700
+
+  - name: create matchbox data directory
+    file:
+      path: /var/lib/matchbox
+      owner: matchbox
+      group: matchbox
+      state: directory
+      mode: 0700
+
+  - name: copy matchbox binary
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/matchbox
+      dest: /usr/local/bin/matchbox
+      mode: a+x
+
+  - stat:
+      path: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/ca.crt
+    register: stcert
+
+  - name: generate matchbox certificates
+    shell: "SAN=DNS.1:matchbox.example.com,IP.1:192.168.0.1 /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/cert-gen"
+    args:
+      chdir: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/
+    when: stcert.stat.exists == False
+
+  - name: copy ca.crt
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/ca.crt
+      dest: /etc/matchbox/
+      owner: matchbox
+      group: matchbox
+
+  - name: copy server.crt
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/server.crt
+      dest: /etc/matchbox/
+      owner: matchbox
+      group: matchbox
+
+  - name: copy server.key
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/server.key
+      dest: /etc/matchbox/
+      owner: matchbox
+      group: matchbox
+
+  - name: copy client.crt
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/client.crt
+      dest: /etc/matchbox/
+
+  - name: copy client.key
+    copy:
+      remote_src: True
+      src: /opt/matchbox-v0.7.0-linux-amd64/scripts/tls/client.key
+      dest: /etc/matchbox/
+
+  - name: enable and start matchbox
+    service:
+      name: matchbox
+      enabled: yes
+      state: started

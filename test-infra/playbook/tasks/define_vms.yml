@@ -1,0 +1,61 @@
+  - stat:
+      path: /var/lib/libvirt/images/coreos_production_qemu_image.img
+    register: stimage
+
+  - name: download container linux image
+    get_url:
+      url: https://stable.release.core-os.net/amd64-usr/current/coreos_production_qemu_image.img.bz2
+      dest: /var/lib/libvirt/images/coreos_production_qemu_image.img.bz2
+    when: stimage.stat.exists == False
+
+  - name: extract container linux image
+    shell: "bunzip2 coreos_production_qemu_image.img.bz2"
+    args:
+      chdir: "/var/lib/libvirt/images/"
+    when: stimage.stat.exists == False
+
+  - name: list VMs
+    virt:
+      command: list_vms
+    register: virt_vms
+
+  - set_fact:
+      vm_hostnames: "{{ vm_hostnames | default([]) }} + [ '{{ansible_hostname}}-node{{item}}' ]"
+    with_sequence: count={{vm_count}}
+
+  - name: ensure manifests directory exists
+    file:
+      path: /var/lib/libvirt/manifests
+      owner: qemu
+      group: qemu
+      mode: 0664
+      state: directory
+
+  - name: write create_vms.sh
+    template:
+      src: templates/create_vms.sh.tpl
+      dest: /usr/local/bin/create_vms.sh
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: create VM image
+    shell: "for name in {{vm_hostnames | join(' ')}}; do create_vms.sh $name; done"
+    register: qemuimg
+    failed_when: "qemuimg.stderr != ''"
+
+  - name: set image directory permissions
+    file:
+      path: /var/lib/libvirt/images
+      owner: qemu
+      group: qemu
+      mode: 0770
+      recurse: yes
+
+  - name: set manifests directory permissions
+    file:
+      path: /var/lib/libvirt/manifests
+      owner: qemu
+      group: qemu
+      mode: 0770
+      recurse: yes
