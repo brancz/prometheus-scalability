@@ -31,6 +31,6 @@ log-dhcp
 address=/matchbox.example.com/192.168.0.1
 
 # static ip assignements
-{% for host in groups['all'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-dhcp-host={{vmif['stdout_lines'][0]}},192.168.{{outer_loop.index + 4}}.{{loop.index}},1h  # {{vmif['item']}}
+{% for host in groups['all'] %}{% set host_loop = loop %}{% for vm_name in hostvars[host]['vm_facts'] %}
+dhcp-host={{hostvars[host]['vm_facts'][vm_name]['mac']}},192.168.{{host_loop.index + 4}}.{{vm_name.split('-')[1]|replace('node', '')}},1h  # {{vm_name}}
 {% endfor %}{% endfor %}

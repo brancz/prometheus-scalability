@@ -11,18 +11,7 @@
   - include: tasks/setup_vm_net.yml
   - include: tasks/define_vms.yml
 
-# Master VMs
-- hosts: masters
-  tasks:
-  - name: "disable unused services"
-    service: name={{item}} state=stopped enabled=no
-    register: unused_disable
-    failed_when: "unused_disable|failed and ('find' not in unused_disable.msg and 'found' not in unused_disable.msg)"
-    with_items:
-      - dnsmasq
-      - matchbox
-
-# Configure and start dnsmasq, matchbox and installer and start VMs
+# Prepare dnsmasq, matchbox and installer
 - hosts: masters,workers
   tasks:
   - name: list VMs
@@ -30,15 +19,23 @@
       command: list_vms
     register: virt_vms
 
-  - name: get VM info
-    virt:
-      command: info
-    register: virt_info
+  - name: write gather_vm_facts.sh
+    template:
+      src: templates/gather_vm_facts.sh.tpl
+      dest: /usr/local/bin/gather_vm_facts.sh
+      owner: root
+      group: root
+      mode: 0755
 
-  - name: get VM mac addresses
-    shell: "virsh domiflist {{item}} | sed '1d;2d' | awk '{print $5}'"
-    register: vm_interfaces
-    with_items: "{{virt_vms.list_vms}}"
+  - name: gather vm facts
+    shell: "for name in {{virt_vms.list_vms | join(' ')}}; do gather_vm_facts.sh $name; done"
+    register: vmfactssh
+    failed_when: "vmfactssh.stderr != ''"
+
+  - name: set vm_interfaces fact
+    set_fact:
+      vm_facts: "{{vm_facts | default({}) | combine({item.split(',')[0]: {'name': item.split(',')[0], 'mac': item.split(',')[1], 'uuid': item.split(',')[2]}})}}"
+    with_items: "{{vmfactssh.stdout_lines}}"
 
   - include: tasks/setup_dnsmasq.yml
     when: ansible_hostname == 'master'
@@ -52,7 +49,7 @@
   - include: tasks/setup_tectonic_installer.yml
     when: ansible_hostname == 'master'
 
-# Run installer
+# Run installer and start VMs
 - hosts: all
 
   vars:
@@ -86,14 +83,6 @@
       chdir: "/opt/tectonic_1.8.4-tectonic.3/"
     environment: "{{tf_env}}"
     when: ansible_hostname == 'master'
-
-  - name: write terraform.env file
-    template:
-      src: templates/terraform.env.tpl
-      dest: /tmp/terraform.env
-      owner: root
-      group: root
-      mode: 0644
 
   - name: run terraform apply
     command: terraform apply -var-file=build/prom-scale-test/terraform.tfvars platforms/metal

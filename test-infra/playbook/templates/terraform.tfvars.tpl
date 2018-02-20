@@ -134,8 +134,8 @@ tectonic_metal_controller_domain = "masters.example.com"
 //
 // Example: `["node2.example.com", "node3.example.com"]`
 tectonic_metal_controller_domains = [
-{% for host in groups['masters'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['item']}}.example.com",
+{% for host in groups['masters'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{vm_name}}.example.com",
 {% endfor %}{% endfor %}
 ]
 
@@ -143,8 +143,8 @@ tectonic_metal_controller_domains = [
 //
 // Example: `["52:54:00:a1:9c:ae"]`
 tectonic_metal_controller_macs = [
-{% for host in groups['masters'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['stdout_lines'][0]}}",
+{% for host in groups['masters'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{hostvars[host]['vm_facts'][vm_name]['mac']}}",
 {% endfor %}{% endfor %}
 ]
 
@@ -152,8 +152,8 @@ tectonic_metal_controller_macs = [
 //
 // Example: `["node1"]`
 tectonic_metal_controller_names = [
-{% for host in groups['masters'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['item']}}",
+{% for host in groups['masters'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{vm_name}}",
 {% endfor %}{% endfor %}
 ]
 
@@ -225,8 +225,8 @@ tectonic_metal_matchbox_rpc_endpoint = "matchbox.example.com:8081"
 //
 // Example: `["node2.example.com", "node3.example.com"]`
 tectonic_metal_worker_domains = [
-{% for host in groups['workers'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['item']}}.example.com",
+{% for host in groups['workers'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{vm_name}}.example.com",
 {% endfor %}{% endfor %}
 ]
 
@@ -234,8 +234,8 @@ tectonic_metal_worker_domains = [
 //
 // Example: `["52:54:00:b2:2f:86", "52:54:00:c3:61:77"]`
 tectonic_metal_worker_macs = [
-{% for host in groups['workers'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['stdout_lines'][0]}}",
+{% for host in groups['workers'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{hostvars[host]['vm_facts'][vm_name]['mac']}}",
 {% endfor %}{% endfor %}
 ]
 
@@ -243,8 +243,8 @@ tectonic_metal_worker_macs = [
 //
 // Example: `["node2", "node3"]`
 tectonic_metal_worker_names = [
-{% for host in groups['workers'] %}{% set outer_loop = loop %}{% for vmif in hostvars[host]['vm_interfaces'].results %}
-"{{vmif['item']}}",
+{% for host in groups['workers'] %}{% for vm_name in hostvars[host]['vm_facts'] %}
+"{{vm_name}}",
 {% endfor %}{% endfor %}
 ]
 

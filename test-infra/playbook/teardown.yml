@@ -10,18 +10,21 @@
       command: info
     register: virt_info
 
-  - name: destroy vms
-    virt:
-      command: destroy
-      name: "{{item}}"
+  - name: determine VMs to destroy
+    set_fact:
+      vms_to_destroy: "{{vms_to_destroy | default([]) + [item]}}"
     when: virt_info[item]['state'] == 'running'
     with_items: "{{virt_vms.list_vms}}"
 
-  - name: undefine vms
-    virt:
-      command: undefine
-      name: "{{item}}"
-    with_items: "{{virt_vms.list_vms}}"
+  - name: destroy VMs
+    shell: "for name in {{vms_to_destroy | join(' ')}}; do virsh destroy $name; done"
+    register: virshdestroysh
+    failed_when: "virshdestroysh.stderr != ''"
+
+  - name: undefine VMs
+    shell: "for name in {{virt_vms.list_vms | join(' ')}}; do virsh undefine $name; done"
+    register: virshundefinesh
+    failed_when: "virshundefinesh.stderr != ''"
 
   - name: purge vm images
     file:
