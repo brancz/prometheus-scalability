@@ -1,0 +1,90 @@
+- hosts: all
+  tasks:
+  - name: list VMs
+    virt:
+      command: list_vms
+    register: virt_vms
+
+  - name: get guest info
+    virt:
+      command: info
+    register: virt_info
+
+  - name: determine VMs to destroy
+    set_fact:
+      vms_to_destroy: "{{vms_to_destroy | default([]) + [item]}}"
+    when: virt_info[item]['state'] == 'running'
+    with_items: "{{virt_vms.list_vms}}"
+
+  - name: destroy VMs
+    shell: "for name in {{vms_to_destroy | join(' ')}}; do virsh destroy $name; done"
+    register: virshdestroysh
+    failed_when: "virshdestroysh.stderr != ''"
+
+  - name: undefine VMs
+    shell: "for name in {{virt_vms.list_vms | join(' ')}}; do virsh undefine $name; done"
+    register: virshundefinesh
+    failed_when: "virshundefinesh.stderr != ''"
+
+  - name: purge vm images
+    file:
+      path: /var/lib/libvirt/images
+      state: absent
+
+  - name: ensure images directory exists after purging
+    file:
+      path: /var/lib/libvirt/images
+      owner: qemu
+      group: qemu
+      mode: 0664
+      state: directory
+
+  - name: purge vm manifests
+    file:
+      path: /var/lib/libvirt/manifests
+      state: absent
+
+  - name: ensure manifests directory exists after purging
+    file:
+      path: /var/lib/libvirt/manifests
+      owner: qemu
+      group: qemu
+      mode: 0664
+      state: directory
+
+- hosts: masters
+  tasks:
+  - name: stop dnsmasq
+    service:
+      name: dnsmasq
+      state: stopped
+
+  - name: stop matchbox
+    service:
+      name: matchbox
+      state: stopped
+
+  - name: delete dnsmasq.conf
+    file:
+      path: /etc/dnsmasq.conf
+      state: absent
+
+  - name: delete dnsmasq.leases
+    file:
+      path: /var/lib/dnsmasq/dnsmasq.leases
+      state: absent
+
+  - name: purge installer terraform.tfstate
+    file:
+      path: /opt/tectonic_1.8.4-tectonic.3/terraform.tfstate
+      state: absent
+
+  - name: purge installer .terraform directory
+    file:
+      path: /opt/tectonic_1.8.4-tectonic.3/.terraform/
+      state: absent
+
+  - name: purge installer generated directory
+    file:
+      path: /opt/tectonic_1.8.4-tectonic.3/generated/
+      state: absent

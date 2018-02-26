@@ -1,0 +1,124 @@
+# Base setup
+- hosts: masters, workers
+  tasks:
+  - lineinfile:
+      dest: /etc/sudoers
+      line: 'Defaults requiretty'
+      state: absent
+    vars:
+      ansible_ssh_pipelining: no
+  - include: tasks/setup_libvirt.yml
+  - include: tasks/setup_vm_net.yml
+  - include: tasks/define_vms.yml
+
+# Prepare dnsmasq, matchbox and installer
+- hosts: masters,workers
+  tasks:
+  - name: list VMs
+    virt:
+      command: list_vms
+    register: virt_vms
+
+  - name: write gather_vm_facts.sh
+    template:
+      src: templates/gather_vm_facts.sh.tpl
+      dest: /usr/local/bin/gather_vm_facts.sh
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: gather vm facts
+    shell: "for name in {{virt_vms.list_vms | join(' ')}}; do gather_vm_facts.sh $name; done"
+    register: vmfactssh
+    failed_when: "vmfactssh.stderr != ''"
+
+  - name: set vm_interfaces fact
+    set_fact:
+      vm_facts: "{{vm_facts | default({}) | combine({item.split(',')[0]: {'name': item.split(',')[0], 'mac': item.split(',')[1], 'uuid': item.split(',')[2]}})}}"
+    with_items: "{{vmfactssh.stdout_lines}}"
+
+  - include: tasks/setup_dnsmasq.yml
+    when: ansible_hostname == 'master'
+
+  - include: tasks/setup_matchbox.yml
+    when: ansible_hostname == 'master'
+
+  - include: tasks/setup_kubectl.yml
+    when: ansible_hostname == 'master'
+
+  - include: tasks/setup_tectonic_installer.yml
+    when: ansible_hostname == 'master'
+
+# Run installer and start VMs
+- hosts: all
+
+  vars:
+    tf_env:
+      INSTALLER_PATH: "/opt/tectonic_1.8.4-tectonic.3/tectonic-installer/linux/installer"
+      PATH: "/opt/tectonic_1.8.4-tectonic.3/tectonic-installer/linux:$PATH"
+      CLUSTER: prom-scale-test
+      TF_VAR_tectonic_admin_email: "admin@example.com"
+      TF_VAR_tectonic_admin_password: "pl41nT3xt"
+
+  tasks:
+  - name: initialize terraform
+    shell: terraform init ./platforms/metal
+    args:
+      chdir: "/opt/tectonic_1.8.4-tectonic.3/"
+    environment: "{{tf_env}}"
+    when: ansible_hostname == 'master'
+
+  - name: hotfix installer
+    template:
+      src: templates/tf_module_container_linux_main.tf.tpl
+      dest: "/opt/tectonic_1.8.4-tectonic.3/modules/container_linux/main.tf"
+      owner: root
+      group: root
+      mode: 0644
+    when: ansible_hostname == 'master'
+
+  - name: run terraform plan
+    shell: terraform plan -var-file=build/prom-scale-test/terraform.tfvars platforms/metal
+    args:
+      chdir: "/opt/tectonic_1.8.4-tectonic.3/"
+    environment: "{{tf_env}}"
+    when: ansible_hostname == 'master'
+
+  - name: run terraform apply
+    command: terraform apply -var-file=build/prom-scale-test/terraform.tfvars platforms/metal
+    args:
+      chdir: "/opt/tectonic_1.8.4-tectonic.3/"
+    environment: "{{tf_env}}"
+    when: ansible_hostname == 'master'
+    become_flags: "-E"
+    async: 300
+    poll: 0
+    register: tfrun
+
+  - pause:
+      seconds: 60
+
+  - name: list VMs
+    virt:
+      command: list_vms
+    register: virt_vms
+
+  - name: get guest info
+    virt:
+      command: info
+    register: virt_info
+
+  - name: start all VMs
+    virt:
+      name: "{{item}}"
+      command: start
+    when: virt_info[item]['state'] != 'running'
+    with_items: "{{ virt_vms.list_vms }}"
+
+  - name: check terraform apply
+    async_status:
+      jid: "{{ tfrun.ansible_job_id }}"
+    when: ansible_hostname == 'master'
+    register: job_result
+    until: job_result.finished
+    retries: 30

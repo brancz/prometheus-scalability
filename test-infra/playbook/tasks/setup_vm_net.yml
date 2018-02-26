@@ -1,0 +1,40 @@
+  - name: create bridge
+    command: "ip link add name vmbri0 type bridge"
+    when: ansible_vmbri0 is not defined
+
+  - name: bring vmbri0 bridge up
+    command: "ip link set vmbri0 up"
+
+  - name: set bridge forwarding delay to zero
+    command: "brctl setfd vmbri0 0"
+
+  - name: bring device eno2 up
+    command: "ip link set eno2 up"
+
+  - name: add device eno2 to bridge vmbri0
+    command: "ip link set eno2 master vmbri0"
+
+  - name: enable proxy arp
+    command: "echo 1 > /proc/sys/net/ipv4/conf/all/proxy_arp"
+
+  - name: define vmbri0 ips for each host
+    set_fact:
+      vmbri0_ip: "{{ vmbri0_ip | default({}) | combine({item.1: item.0}) }}"
+    with_indexed_items: "{{groups['all']}}"
+
+  # Gather facts on bridge interface, else below conditional won't work
+  - setup:
+       filter: ansible_vmbri0
+
+  - name: set vmbri0 ip
+    command: "ip address add 192.168.0.{{vmbri0_ip[ansible_hostname] + 1}}/16 dev vmbri0"
+    when: "'ipv4' not in ansible_vmbri0 or ansible_vmbri0.ipv4.address != '192.168.0.{{vmbri0_ip[ansible_hostname] + 1}}'"
+
+  - name: setup NAT for VM
+    shell: "iptables -t nat -A POSTROUTING -o bond0 -j MASQUERADE"
+
+  - name: set iptables ingress rule
+    shell: "iptables -A FORWARD -i bond0 -o vmbri0 -m state --state RELATED,ESTABLISHED -j ACCEPT"
+
+  - name: set iptables egress rule
+    shell: "iptables -A FORWARD -i vmbri0 -o bond0 -j ACCEPT"

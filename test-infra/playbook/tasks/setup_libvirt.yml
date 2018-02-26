@@ -1,0 +1,43 @@
+  - name: enable centos-release-qemu-ev
+    yum:
+      name: centos-release-qemu-ev
+      state: latest
+
+  - name: "install requirements"
+    yum:
+      name: "{{item}}"
+      state: latest
+    with_items:
+      - qemu-kvm-ev
+      - virt-install
+      - libvirt
+      - libvirt-python
+      - unzip
+
+  - name: enable and start libvirtd
+    service:
+      name: libvirtd
+      enabled: yes
+      state: started
+    register: libvirtd
+
+  - name: wait for libvirtd to get up
+    pause: seconds=30
+    when: libvirtd.changed
+
+  - name: get libvirt networks
+    shell: "virsh net-list | sed '1d;2d' | awk '{print $1}'"
+    register: virt_networks
+
+  - name: destroy default libvirt network
+    command: "virsh net-destroy {{item}}"
+    when: virt_networks.stdout != ''
+    with_items: "{{virt_networks.stdout_lines}}"
+
+  - name: write resolv.conf file
+    template:
+      src: templates/resolv.conf.tpl
+      dest: /etc/resolv.conf
+      owner: root
+      group: root
+      mode: 0644

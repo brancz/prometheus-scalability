@@ -1,0 +1,44 @@
+  - stat:
+      path: /opt/tectonic_1.8.4-tectonic.3/
+    register: sttectonic
+
+  - name: download and extract tectonic installer
+    unarchive:
+      src: https://releases.tectonic.com/releases/tectonic_1.8.4-tectonic.3.zip
+      dest: /opt/
+      remote_src: yes
+    when: sttectonic.stat.exists == False
+
+  - stat:
+      path: /opt/tectonic_1.8.4-tectonic.3/build/prom-scale-test/
+    register: stclusterdir
+
+  - name: create cluster build directory
+    file:
+      path: /opt/tectonic_1.8.4-tectonic.3/build/prom-scale-test
+      state: directory
+      mode: 0755
+    when: stclusterdir.stat.exists == False
+
+  - name: slurp ca.crt
+    slurp:
+      src: /etc/matchbox/ca.crt
+    register: cacertfile
+
+  - name: slurp client.crt
+    slurp:
+      src: /etc/matchbox/client.crt
+    register: clientcertfile
+
+  - name: slurp client.key
+    slurp:
+      src: /etc/matchbox/client.key
+    register: clientkeyfile
+
+  - name: write terraform.tfvars
+    template:
+      src: templates/terraform.tfvars.tpl
+      dest: /opt/tectonic_1.8.4-tectonic.3/build/prom-scale-test/terraform.tfvars
+      owner: root
+      group: root
+      mode: 0644
